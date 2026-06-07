@@ -35,23 +35,25 @@ export function AvailableDatesPanel({
           此月份沒有時間空檔。
         </p>
       ) : (
-        <div className="max-h-48 space-y-3 overflow-y-auto">
+        <div className="max-h-none space-y-3 overflow-y-auto sm:max-h-48">
           {groupedSlots.map(({ week, label, items }) => (
             <section key={week}>
               <h4 className="mb-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                 {label}
               </h4>
-              <ul className="space-y-1.5">
+              <ul className="space-y-2 sm:space-y-1.5">
                 {items.map((slot) => (
                   <li key={`${slot.date}-${slot.startTime}-${slot.endTime}`}>
                     <button
                       type="button"
                       onClick={() => onSlotClick?.(slot)}
                       disabled={!onSlotClick}
-                      className="w-full rounded-lg bg-white px-2.5 py-1.5 text-left text-sm text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-default disabled:hover:bg-white dark:bg-emerald-900/50 dark:text-emerald-200 dark:hover:bg-emerald-900 dark:disabled:hover:bg-emerald-900/50"
+                      className="flex w-full min-h-[48px] touch-manipulation flex-col justify-center rounded-xl bg-white px-4 py-3 text-left transition active:scale-[0.98] active:bg-emerald-100 disabled:cursor-default disabled:active:scale-100 disabled:active:bg-white sm:min-h-0 sm:rounded-lg sm:px-2.5 sm:py-1.5 sm:active:scale-100 disabled:hover:bg-white dark:bg-emerald-900/50 dark:active:bg-emerald-900 dark:disabled:active:bg-emerald-900/50 dark:hover:bg-emerald-900 dark:disabled:hover:bg-emerald-900/50"
                     >
-                      <span className="font-medium">{formatDisplayDate(slot.date)}</span>
-                      <span className="ml-1 text-emerald-600 dark:text-emerald-300">
+                      <span className="text-base font-medium text-emerald-800 sm:text-sm dark:text-emerald-200">
+                        {formatDisplayDate(slot.date)}
+                      </span>
+                      <span className="text-sm text-emerald-600 sm:text-sm dark:text-emerald-300">
                         {formatTimeRange(slot.startTime, slot.endTime)}
                       </span>
                     </button>
