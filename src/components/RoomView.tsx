@@ -1,23 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { format, parseISO, startOfMonth } from "date-fns";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { getAvailableSlotsForMonth } from "@/lib/calendar-utils";
 import { getColorForIndex } from "@/lib/colors";
+import { createBrowserClient } from "@/lib/supabase/client";
+import {
+  resolveAgreedTimes,
+  resolveScheduleTimes,
+  type AvailableSlot,
+} from "@/lib/time-utils";
+import type { AgreedSlot, Participant, Room, Schedule } from "@/lib/types";
 import {
   getParticipantId,
   getUserName,
   setParticipantId,
 } from "@/lib/user-storage";
-import { getAvailableSlotsForMonth } from "@/lib/calendar-utils";
-import { resolveAgreedTimes, resolveScheduleTimes, type AvailableSlot } from "@/lib/time-utils";
-import type { AgreedSlot, Participant, Room, Schedule } from "@/lib/types";
+import { format, parseISO, startOfMonth } from "date-fns";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AgreedDatesPanel } from "./AgreedDatesPanel";
+import { AppointmentModal, type AgreedSlotFormData } from "./AppointmentModal";
+import { AvailableDatesPanel } from "./AvailableDatesPanel";
 import { Calendar } from "./Calendar";
 import { ParticipantLegend } from "./ParticipantLegend";
-import { AvailableDatesPanel } from "./AvailableDatesPanel";
 import { ScheduleModal, type ScheduleFormData } from "./ScheduleModal";
-import { AppointmentModal, type AgreedSlotFormData } from "./AppointmentModal";
 
 interface RoomViewProps {
   roomId: string;
@@ -73,9 +78,9 @@ export function RoomView({ roomId, userName: userNameProp }: RoomViewProps) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [agreedSlots, setAgreedSlots] = useState<AgreedSlot[]>([]);
-  const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(
-    null,
-  );
+  const [currentParticipantId, setCurrentParticipantId] = useState<
+    string | null
+  >(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [appointmentModal, setAppointmentModal] = useState<{
     mode: "create" | "view";
@@ -133,7 +138,10 @@ export function RoomView({ roomId, userName: userNameProp }: RoomViewProps) {
   );
 
   const ensureParticipant = useCallback(
-    async (name: string, currentParticipants: Participant[]): Promise<string> => {
+    async (
+      name: string,
+      currentParticipants: Participant[],
+    ): Promise<string> => {
       const existingId = resolveParticipantId(name, currentParticipants);
       if (existingId) {
         setParticipantId(roomId, name, existingId);
@@ -165,30 +173,32 @@ export function RoomView({ roomId, userName: userNameProp }: RoomViewProps) {
     let cancelled = false;
 
     void fetchRoomData()
-      .then(async ({ room: r, participants: p, schedules: s, agreedSlots: a }) => {
-        if (cancelled) return;
-        setRoom(r);
-        setParticipants(p);
-        setSchedules(s);
-        setAgreedSlots(a);
-        setCurrentMonth(() => {
-          const todayKey = format(new Date(), "yyyy-MM-dd");
-          if (todayKey >= r.start_date && todayKey <= r.end_date) {
-            return new Date();
-          }
-          return startOfMonth(parseISO(r.start_date));
-        });
+      .then(
+        async ({ room: r, participants: p, schedules: s, agreedSlots: a }) => {
+          if (cancelled) return;
+          setRoom(r);
+          setParticipants(p);
+          setSchedules(s);
+          setAgreedSlots(a);
+          setCurrentMonth(() => {
+            const todayKey = format(new Date(), "yyyy-MM-dd");
+            if (todayKey >= r.start_date && todayKey <= r.end_date) {
+              return new Date();
+            }
+            return startOfMonth(parseISO(r.start_date));
+          });
 
-        if (userName) {
-          const resolvedId = resolveParticipantId(userName, p);
-          if (resolvedId) {
-            setCurrentParticipantId(resolvedId);
-            setParticipantId(roomId, userName, resolvedId);
+          if (userName) {
+            const resolvedId = resolveParticipantId(userName, p);
+            if (resolvedId) {
+              setCurrentParticipantId(resolvedId);
+              setParticipantId(roomId, userName, resolvedId);
+            }
           }
-        }
 
-        setLoading(false);
-      })
+          setLoading(false);
+        },
+      )
       .catch((err) => {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "載入失敗");
@@ -199,42 +209,63 @@ export function RoomView({ roomId, userName: userNameProp }: RoomViewProps) {
       .channel(`room-${roomId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "participants", filter: `room_id=eq.${roomId}` },
+        {
+          event: "*",
+          schema: "public",
+          table: "participants",
+          filter: `room_id=eq.${roomId}`,
+        },
         () => {
-          void fetchRoomData().then(({ participants: p, schedules: s, agreedSlots: a }) => {
-            if (cancelled) return;
-            setParticipants(p);
-            setSchedules(s);
-            setAgreedSlots(a);
-            if (userName) {
-              const resolvedId = resolveParticipantId(userName, p);
-              if (resolvedId) setCurrentParticipantId(resolvedId);
-            }
-          });
+          void fetchRoomData().then(
+            ({ participants: p, schedules: s, agreedSlots: a }) => {
+              if (cancelled) return;
+              setParticipants(p);
+              setSchedules(s);
+              setAgreedSlots(a);
+              if (userName) {
+                const resolvedId = resolveParticipantId(userName, p);
+                if (resolvedId) setCurrentParticipantId(resolvedId);
+              }
+            },
+          );
         },
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "busy_dates", filter: `room_id=eq.${roomId}` },
+        {
+          event: "*",
+          schema: "public",
+          table: "busy_dates",
+          filter: `room_id=eq.${roomId}`,
+        },
         () => {
-          void fetchRoomData().then(({ participants: p, schedules: s, agreedSlots: a }) => {
-            if (cancelled) return;
-            setParticipants(p);
-            setSchedules(s);
-            setAgreedSlots(a);
-          });
+          void fetchRoomData().then(
+            ({ participants: p, schedules: s, agreedSlots: a }) => {
+              if (cancelled) return;
+              setParticipants(p);
+              setSchedules(s);
+              setAgreedSlots(a);
+            },
+          );
         },
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "agreed_slots", filter: `room_id=eq.${roomId}` },
+        {
+          event: "*",
+          schema: "public",
+          table: "agreed_slots",
+          filter: `room_id=eq.${roomId}`,
+        },
         () => {
-          void fetchRoomData().then(({ participants: p, schedules: s, agreedSlots: a }) => {
-            if (cancelled) return;
-            setParticipants(p);
-            setSchedules(s);
-            setAgreedSlots(a);
-          });
+          void fetchRoomData().then(
+            ({ participants: p, schedules: s, agreedSlots: a }) => {
+              if (cancelled) return;
+              setParticipants(p);
+              setSchedules(s);
+              setAgreedSlots(a);
+            },
+          );
         },
       )
       .subscribe();
@@ -263,7 +294,8 @@ export function RoomView({ roomId, userName: userNameProp }: RoomViewProps) {
   const myScheduleOnSelectedDate = useMemo(() => {
     if (!currentParticipantId || !selectedDate) return null;
     return schedules.find(
-      (s) => s.date === selectedDate && s.participant_id === currentParticipantId,
+      (s) =>
+        s.date === selectedDate && s.participant_id === currentParticipantId,
     );
   }, [schedules, selectedDate, currentParticipantId]);
 
@@ -307,9 +339,7 @@ export function RoomView({ roomId, userName: userNameProp }: RoomViewProps) {
       if (updateError) throw updateError;
 
       setSchedules((prev) =>
-        prev.map((s) =>
-          s.id === existing.id ? { ...s, ...payload } : s,
-        ),
+        prev.map((s) => (s.id === existing.id ? { ...s, ...payload } : s)),
       );
     } else {
       const { data: inserted, error: insertError } = await supabase
@@ -348,10 +378,14 @@ export function RoomView({ roomId, userName: userNameProp }: RoomViewProps) {
   }
 
   async function handleSaveAgreed(data: AgreedSlotFormData) {
-    if (!userName || !appointmentModal) throw new Error("請先從首頁輸入使用者名稱");
+    if (!userName || !appointmentModal)
+      throw new Error("請先從首頁輸入使用者名稱");
 
     const participantId = await ensureParticipant(userName, participants);
-    const { start_time, end_time } = resolveAgreedTimes(data.startTime, data.endTime);
+    const { start_time, end_time } = resolveAgreedTimes(
+      data.startTime,
+      data.endTime,
+    );
 
     const date = (appointmentModal.slot as AvailableSlot).date;
 
@@ -425,7 +459,7 @@ export function RoomView({ roomId, userName: userNameProp }: RoomViewProps) {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <header>
-        <h1 className="text-2xl font-bold">房間 {room.id}</h1>
+        <h1 className="text-2xl font-bold">{room.id}</h1>
         <p className="text-sm text-zinc-500">
           {room.start_date} ~ {room.end_date}
           {userName && (
@@ -459,14 +493,19 @@ export function RoomView({ roomId, userName: userNameProp }: RoomViewProps) {
           onAgreedClick={handleAgreedClick}
         />
         <div className="flex flex-col gap-4">
-          <ParticipantLegend
-            participants={participants}
-            currentParticipantId={currentParticipantId}
+          <AgreedDatesPanel
+            agreedSlots={agreedSlots}
+            currentMonth={currentMonth}
+            onAgreedClick={handleAgreedClick}
           />
           <AvailableDatesPanel
             availableSlots={availableSlots}
             currentMonth={currentMonth}
             onSlotClick={userName ? handleAvailableSlotClick : undefined}
+          />
+          <ParticipantLegend
+            participants={participants}
+            currentParticipantId={currentParticipantId}
           />
         </div>
       </div>
