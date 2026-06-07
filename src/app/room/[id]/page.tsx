@@ -3,10 +3,13 @@ import { RoomView } from "@/components/RoomView";
 
 interface RoomPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ user?: string }>;
 }
 
-export default async function RoomPage({ params }: RoomPageProps) {
+export default async function RoomPage({ params, searchParams }: RoomPageProps) {
   const { id } = await params;
+  const { user } = await searchParams;
+  const userName = user?.trim() ?? "";
 
   return (
     <main className="flex-1 px-4 py-8">
@@ -18,7 +21,7 @@ export default async function RoomPage({ params }: RoomPageProps) {
           ← 返回首頁
         </Link>
       </div>
-      <RoomView roomId={id} />
+      <RoomView key={`${id}-${userName}`} roomId={id} userName={userName} />
     </main>
   );
 }

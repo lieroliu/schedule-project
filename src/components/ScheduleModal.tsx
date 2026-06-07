@@ -2,32 +2,52 @@
 
 import { useEffect, useState } from "react";
 import { formatDisplayDate } from "@/lib/calendar-utils";
+import { formatScheduleTime } from "@/lib/time-utils";
 import type { Participant } from "@/lib/types";
+
+export interface ScheduleFormData {
+  note: string;
+  startTime: string;
+  endTime: string;
+}
+
+interface ScheduleItem {
+  scheduleId: string;
+  participant: Participant;
+  note: string | null;
+  startTime: string | null;
+  endTime: string | null;
+}
 
 interface ScheduleModalProps {
   dateKey: string;
-  schedules: Array<{ participant: Participant; note: string | null; scheduleId: string }>;
-  currentParticipantId: string | null;
+  schedules: ScheduleItem[];
+  myScheduleId: string | null;
+  myScheduleNote: string | null;
+  myStartTime: string | null;
+  myEndTime: string | null;
   userName: string;
   onClose: () => void;
-  onSave: (name: string, note: string) => Promise<void>;
+  onSave: (data: ScheduleFormData) => Promise<void>;
   onDelete: (scheduleId: string) => Promise<void>;
 }
 
 export function ScheduleModal({
   dateKey,
   schedules,
-  currentParticipantId,
+  myScheduleId,
+  myScheduleNote,
+  myStartTime,
+  myEndTime,
   userName,
   onClose,
   onSave,
   onDelete,
 }: ScheduleModalProps) {
-  const mySchedule = schedules.find(
-    (s) => s.participant.id === currentParticipantId,
-  );
-  const [name, setName] = useState(userName || mySchedule?.participant.name || "");
-  const [note, setNote] = useState(mySchedule?.note || "");
+  const othersSchedules = schedules.filter((s) => s.scheduleId !== myScheduleId);
+  const [note, setNote] = useState(myScheduleNote ?? "");
+  const [startTime, setStartTime] = useState(myStartTime?.slice(0, 5) ?? "");
+  const [endTime, setEndTime] = useState(myEndTime?.slice(0, 5) ?? "");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -42,12 +62,24 @@ export function ScheduleModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+
+    const hasStart = startTime.trim().length > 0;
+    const hasEnd = endTime.trim().length > 0;
+
+    if (hasStart !== hasEnd) {
+      setError("請同時填寫開始與結束時間，或兩者都留空代表整天沒空");
+      return;
+    }
+
+    if (hasStart && hasEnd && startTime >= endTime) {
+      setError("結束時間必須晚於開始時間");
+      return;
+    }
 
     setSaving(true);
     setError("");
     try {
-      await onSave(name.trim(), note.trim());
+      await onSave({ note: note.trim(), startTime, endTime });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "儲存失敗");
@@ -57,11 +89,11 @@ export function ScheduleModal({
   }
 
   async function handleDelete() {
-    if (!mySchedule) return;
+    if (!myScheduleId) return;
     setDeleting(true);
     setError("");
     try {
-      await onDelete(mySchedule.scheduleId);
+      await onDelete(myScheduleId);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "刪除失敗");
@@ -83,6 +115,9 @@ export function ScheduleModal({
           <div>
             <h2 className="text-lg font-semibold">排程</h2>
             <p className="text-sm text-zinc-500">{formatDisplayDate(dateKey)}</p>
+            <p className="mt-1 text-sm font-medium text-indigo-600 dark:text-indigo-400">
+              {userName}
+            </p>
           </div>
           <button
             type="button"
@@ -93,11 +128,11 @@ export function ScheduleModal({
           </button>
         </div>
 
-        {schedules.length > 0 && (
+        {othersSchedules.length > 0 && (
           <div className="mb-4 rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/50">
-            <p className="mb-2 text-xs font-medium text-zinc-500">大家的排程</p>
+            <p className="mb-2 text-xs font-medium text-zinc-500">其他人的排程（僅供查看）</p>
             <ul className="space-y-2">
-              {schedules.map((s) => (
+              {othersSchedules.map((s) => (
                 <li key={s.scheduleId} className="flex items-start gap-2 text-sm">
                   <span
                     className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
@@ -105,11 +140,13 @@ export function ScheduleModal({
                   />
                   <div>
                     <span className="font-medium">{s.participant.name}</span>
-                    {s.note && (
+                    <p className="text-xs text-zinc-500">
+                      {formatScheduleTime(s.startTime, s.endTime)}
+                    </p>
+                    {s.note ? (
                       <p className="text-zinc-600 dark:text-zinc-400">{s.note}</p>
-                    )}
-                    {!s.note && (
-                      <p className="text-zinc-400">沒空</p>
+                    ) : (
+                      <p className="text-zinc-400">整天沒空</p>
                     )}
                   </div>
                 </li>
@@ -120,24 +157,39 @@ export function ScheduleModal({
 
         {schedules.length === 0 && (
           <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
-            此日目前無排程，大家都空閒
+            此日目前無排程，全天空檔
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="mb-1 block text-sm font-medium">你的名字</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="輸入名字"
-              required
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-zinc-700 dark:bg-zinc-800"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                開始時間 <span className="text-zinc-400">（選填）</span>
+              </label>
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                結束時間 <span className="text-zinc-400">（選填）</span>
+              </label>
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
+              />
+            </div>
           </div>
+          <p className="text-xs text-zinc-400">不填時間代表整天都沒空（24 小時）</p>
+
           <div>
-            <label className="mb-1 block text-sm font-medium">排程內容</label>
+            <label className="mb-1 block text-sm font-medium">我的排程</label>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -145,13 +197,13 @@ export function ScheduleModal({
               rows={3}
               className="w-full resize-none rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-zinc-700 dark:bg-zinc-800"
             />
-            <p className="mt-1 text-xs text-zinc-400">留空表示此日沒空</p>
+            <p className="mt-1 text-xs text-zinc-400">備註可選</p>
           </div>
 
           {error && <p className="text-sm text-red-500">{error}</p>}
 
           <div className="flex gap-2">
-            {mySchedule && (
+            {myScheduleId && (
               <button
                 type="button"
                 onClick={handleDelete}
@@ -166,7 +218,7 @@ export function ScheduleModal({
               disabled={saving}
               className="ml-auto rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
             >
-              {saving ? "儲存中..." : "儲存排程"}
+              {saving ? "儲存中..." : "儲存我的排程"}
             </button>
           </div>
         </form>

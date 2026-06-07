@@ -1,16 +1,22 @@
 import {
   eachDayOfInterval,
   format,
+  isSameMonth,
   parseISO,
   startOfMonth,
   endOfMonth,
   startOfWeek,
   endOfWeek,
-  isSameMonth,
   isWithinInterval,
 } from "date-fns";
 import { zhTW } from "date-fns/locale";
-import type { DateInfo, Participant, Schedule } from "./types";
+import {
+  hasAnyFreeSlot,
+  isFullDayFree,
+  getFreeSlotsForDate,
+  type AvailableSlot,
+} from "./time-utils";
+import type { AgreedSlot, DateInfo, Participant, Schedule } from "./types";
 
 export function formatDateKey(date: Date): string {
   return format(date, "yyyy-MM-dd");
@@ -45,6 +51,7 @@ export function buildDateInfoMap(
   endDate: string,
   participants: Participant[],
   schedules: Schedule[],
+  agreedSlots: AgreedSlot[] = [],
 ): Map<string, DateInfo> {
   const participantMap = new Map(participants.map((p) => [p.id, p]));
   const dateMap = new Map<string, DateInfo>();
@@ -53,7 +60,9 @@ export function buildDateInfoMap(
     dateMap.set(dateKey, {
       date: dateKey,
       schedules: [],
-      isAvailable: true,
+      agreedSlots: agreedSlots.filter((a) => a.date === dateKey),
+      isFullyFree: isFullDayFree(dateKey, schedules, agreedSlots),
+      hasFreeSlots: hasAnyFreeSlot(dateKey, schedules, agreedSlots),
     });
   }
 
@@ -61,8 +70,20 @@ export function buildDateInfoMap(
     const info = dateMap.get(schedule.date);
     const participant = participantMap.get(schedule.participant_id);
     if (info && participant) {
-      info.schedules.push({ participant, note: schedule.note });
-      info.isAvailable = false;
+      info.schedules.push({
+        participant,
+        note: schedule.note,
+        start_time: schedule.start_time,
+        end_time: schedule.end_time,
+      });
+    }
+  }
+
+  for (const dateKey of getDateRangeDays(startDate, endDate)) {
+    const info = dateMap.get(dateKey);
+    if (info) {
+      info.isFullyFree = isFullDayFree(dateKey, schedules, agreedSlots);
+      info.hasFreeSlots = hasAnyFreeSlot(dateKey, schedules, agreedSlots);
     }
   }
 
@@ -82,4 +103,16 @@ export function isDateInRange(
 
 export function isSameCalendarMonth(date: Date, month: Date): boolean {
   return isSameMonth(date, month);
+}
+
+export function getAvailableSlotsForMonth(
+  startDate: string,
+  endDate: string,
+  schedules: Schedule[],
+  month: Date,
+  agreedSlots: AgreedSlot[] = [],
+): AvailableSlot[] {
+  return getDateRangeDays(startDate, endDate)
+    .filter((date) => isSameMonth(parseISO(date), month))
+    .flatMap((date) => getFreeSlotsForDate(date, schedules, agreedSlots));
 }

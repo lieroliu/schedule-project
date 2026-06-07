@@ -6,7 +6,7 @@ export default function HomePage() {
       <div className="mb-8 text-center">
         <h1 className="mb-2 text-3xl font-bold tracking-tight">共同空檔日曆</h1>
         <p className="text-zinc-600 dark:text-zinc-400">
-          輸入房間 ID 進入行事曆
+          輸入名稱與房間 ID 進入行事曆
         </p>
       </div>
 

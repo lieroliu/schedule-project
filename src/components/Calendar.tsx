@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { addMonths, format, subMonths } from "date-fns";
 import { zhTW } from "date-fns/locale";
 import {
@@ -10,14 +10,19 @@ import {
   isDateInRange,
   isSameCalendarMonth,
 } from "@/lib/calendar-utils";
-import type { Participant, Schedule } from "@/lib/types";
+import { formatAgreedTime, formatScheduleTime } from "@/lib/time-utils";
+import type { AgreedSlot, Participant, Schedule } from "@/lib/types";
 
 interface CalendarProps {
   startDate: string;
   endDate: string;
   participants: Participant[];
   schedules: Schedule[];
+  agreedSlots: AgreedSlot[];
+  currentMonth: Date;
+  onMonthChange: (month: Date) => void;
   onDateClick: (dateKey: string) => void;
+  onAgreedClick: (agreed: AgreedSlot) => void;
 }
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
@@ -28,13 +33,15 @@ export function Calendar({
   endDate,
   participants,
   schedules,
+  agreedSlots,
+  currentMonth,
+  onMonthChange,
   onDateClick,
+  onAgreedClick,
 }: CalendarProps) {
-  const [currentMonth, setCurrentMonth] = useState(() => new Date(startDate));
-
   const dateInfoMap = useMemo(
-    () => buildDateInfoMap(startDate, endDate, participants, schedules),
-    [startDate, endDate, participants, schedules],
+    () => buildDateInfoMap(startDate, endDate, participants, schedules, agreedSlots),
+    [startDate, endDate, participants, schedules, agreedSlots],
   );
 
   const calendarDays = useMemo(
@@ -53,7 +60,7 @@ export function Calendar({
       <div className="mb-4 flex items-center justify-between">
         <button
           type="button"
-          onClick={() => setCurrentMonth((m) => subMonths(m, 1))}
+          onClick={() => onMonthChange(subMonths(currentMonth, 1))}
           className="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
           ←
@@ -63,7 +70,7 @@ export function Calendar({
         </h2>
         <button
           type="button"
-          onClick={() => setCurrentMonth((m) => addMonths(m, 1))}
+          onClick={() => onMonthChange(addMonths(currentMonth, 1))}
           className="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
           →
@@ -87,8 +94,11 @@ export function Calendar({
           const inRange = isDateInRange(date, startDate, endDate);
           const inMonth = isSameCalendarMonth(date, currentMonth);
           const info = dateInfoMap.get(dateKey);
-          const isAvailable = info?.isAvailable ?? false;
+          const isFullyFree = info?.isFullyFree ?? false;
+          const hasFreeSlots = info?.hasFreeSlots ?? false;
           const daySchedules = info?.schedules ?? [];
+          const dayAgreed = info?.agreedSlots ?? [];
+          const hasAgreed = dayAgreed.length > 0;
           const visible = daySchedules.slice(0, MAX_VISIBLE);
           const overflow = daySchedules.length - MAX_VISIBLE;
 
@@ -97,41 +107,92 @@ export function Calendar({
               key={dateKey}
               type="button"
               disabled={!inRange}
-              onClick={() => handleDayClick(date)}
+              onClick={() => {
+                if (!inRange) return;
+                if (hasAgreed && dayAgreed.length === 1) {
+                  onAgreedClick(dayAgreed[0]);
+                } else if (!hasAgreed) {
+                  handleDayClick(date);
+                }
+              }}
               className={[
-                "relative flex min-h-[88px] flex-col rounded-lg p-1.5 text-left text-sm transition",
+                "relative flex min-h-[96px] flex-col rounded-lg p-1.5 text-left text-sm transition",
                 !inMonth && "opacity-30",
                 !inRange && "cursor-not-allowed opacity-20",
                 inRange && "cursor-pointer hover:ring-2 hover:ring-indigo-300",
-                isAvailable && inRange &&
+                hasAgreed && inRange &&
+                  "bg-violet-50 ring-2 ring-violet-400 dark:bg-violet-950/40",
+                !hasAgreed && isFullyFree && inRange &&
                   "bg-emerald-50 ring-2 ring-emerald-400 dark:bg-emerald-950/40",
-                !isAvailable && inRange && "bg-zinc-50 dark:bg-zinc-800/50",
+                !hasAgreed && !isFullyFree && hasFreeSlots && inRange &&
+                  "bg-amber-50 ring-1 ring-amber-300 dark:bg-amber-950/30",
+                !hasAgreed && !hasFreeSlots && inRange && "bg-zinc-50 dark:bg-zinc-800/50",
               ]
                 .filter(Boolean)
                 .join(" ")}
             >
               <span className="mb-1 self-start font-medium">{format(date, "d")}</span>
 
-              {isAvailable && inRange && (
+              {hasAgreed && inRange && (
+                <>
+                  <span className="rounded bg-violet-200 px-1 py-0.5 text-[10px] font-medium text-violet-800 dark:bg-violet-900/60 dark:text-violet-200">
+                    已約定
+                  </span>
+                  {dayAgreed.map((agreed) => (
+                    <span
+                      key={agreed.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAgreedClick(agreed);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.stopPropagation();
+                          onAgreedClick(agreed);
+                        }
+                      }}
+                      className="mt-0.5 truncate text-[10px] font-medium text-violet-700 hover:underline dark:text-violet-300"
+                      title="點擊刪除"
+                    >
+                      {formatAgreedTime(agreed)}
+                    </span>
+                  ))}
+                </>
+              )}
+
+              {!hasAgreed && isFullyFree && inRange && (
                 <span className="rounded bg-emerald-100 px-1 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
-                  空檔
+                  全天空檔
                 </span>
               )}
 
-              {visible.map(({ participant, note }) => (
-                <span
-                  key={participant.id}
-                  className="mt-0.5 truncate rounded px-1 py-0.5 text-[10px] leading-tight text-white"
-                  style={{ backgroundColor: participant.color }}
-                  title={note ? `${participant.name}: ${note}` : participant.name}
-                >
-                  {participant.name}
-                  {note ? ` · ${note}` : ""}
+              {!hasAgreed && !isFullyFree && hasFreeSlots && inRange && (
+                <span className="rounded bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+                  部分空檔
                 </span>
-              ))}
+              )}
 
-              {overflow > 0 && (
-                <span className="mt-0.5 text-[10px] text-zinc-500">+{overflow} 更多</span>
+              {!hasAgreed && (
+                <>
+                  {visible.map(({ participant, note, start_time, end_time }) => (
+                    <span
+                      key={participant.id}
+                      className="mt-0.5 truncate rounded px-1 py-0.5 text-[10px] leading-tight text-white"
+                      style={{ backgroundColor: participant.color }}
+                      title={`${participant.name} ${formatScheduleTime(start_time, end_time)}${note ? `: ${note}` : ""}`}
+                    >
+                      {participant.name}
+                      {" "}
+                      {formatScheduleTime(start_time, end_time)}
+                    </span>
+                  ))}
+
+                  {overflow > 0 && (
+                    <span className="mt-0.5 text-[10px] text-zinc-500">+{overflow} 更多</span>
+                  )}
+                </>
               )}
             </button>
           );
@@ -139,7 +200,7 @@ export function Calendar({
       </div>
 
       <p className="mt-4 text-center text-xs text-zinc-500">
-        綠色高亮 = 空檔（無人排程）· 點擊日期新增或編輯排程
+        綠色 = 全天空檔 · 黃色 = 部分空檔 · 紫色 = 已約定（點擊刪除）
       </p>
     </div>
   );
