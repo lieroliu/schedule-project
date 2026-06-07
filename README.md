@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 共同空檔日曆
 
-## Getting Started
+多人協作找出共同有空日期的排程工具。每人標記「沒空」的日期，系統自動計算所有人都空閒的日子。
 
-First, run the development server:
+## 功能
+
+- 建立排程房間，設定日期範圍
+- 分享連結，多人加入並輸入名字
+- 日曆上點選標記各自沒空的日期（以顏色區分）
+- 自動顯示「共同有空日期」（沒被任何人標記的日期）
+- Supabase Realtime 即時同步
+
+## 技術棧
+
+- Next.js 16 (App Router)
+- TypeScript + Tailwind CSS
+- Supabase (PostgreSQL + Realtime)
+- Vercel 部署
+
+## 本地開發
+
+### 1. 建立 Supabase 專案
+
+1. 前往 [supabase.com](https://supabase.com) 建立新專案
+2. 在 **SQL Editor** 執行 `supabase/schema.sql`
+3. 在 **Project Settings > API** 取得 URL 與 anon key
+
+### 2. 設定環境變數
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+編輯 `.env.local`：
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG...
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. 啟動開發伺服器
 
-## Learn More
+```bash
+npm install
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+開啟 [http://localhost:3000](http://localhost:3000)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 部署到 Vercel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. 將專案推送到 GitHub
+2. 在 [vercel.com](https://vercel.com) 匯入此 repository
+3. 在 Vercel 專案設定中加入環境變數：
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+4. 部署完成
 
-## Deploy on Vercel
+或使用 Vercel CLI：
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm i -g vercel
+vercel
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 使用流程
+
+1. **建立排程** — 輸入活動名稱與日期範圍
+2. **分享連結** — 將房間連結傳給朋友
+3. **標記沒空日期** — 各人在日曆上點選無法參與的日期
+4. **查看共同空檔** — 頂部綠色區塊顯示所有人都空閒的日期
