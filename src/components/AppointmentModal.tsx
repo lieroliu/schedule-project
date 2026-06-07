@@ -2,8 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { formatDisplayDate } from "@/lib/calendar-utils";
-import { formatAgreedTime, formatTimeRange } from "@/lib/time-utils";
+import {
+  formatAgreedTime,
+  formatTimeRange,
+  isEndAfterStart,
+  timeToHour,
+} from "@/lib/time-utils";
 import type { AgreedSlot } from "@/lib/types";
+import { HourSelect } from "./HourSelect";
 
 export interface AgreedSlotFormData {
   title: string;
@@ -35,8 +41,8 @@ export function AppointmentModal({
   onDelete,
 }: AppointmentModalProps) {
   const [title, setTitle] = useState(initialTitle ?? "");
-  const [startTime, setStartTime] = useState(initialStart.slice(0, 5));
-  const [endTime, setEndTime] = useState(initialEnd.slice(0, 5));
+  const [startTime, setStartTime] = useState(timeToHour(initialStart));
+  const [endTime, setEndTime] = useState(timeToHour(initialEnd));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -51,7 +57,11 @@ export function AppointmentModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (startTime >= endTime) {
+    if (!startTime.trim()) {
+      setError("請填寫開始時間");
+      return;
+    }
+    if (!isEndAfterStart(startTime, endTime.trim() ? endTime : "24")) {
       setError("結束時間必須晚於開始時間");
       return;
     }
@@ -162,22 +172,16 @@ export function AppointmentModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-sm font-medium">開始時間</label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                required
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
-              />
+              <HourSelect value={startTime} onChange={setStartTime} />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium">結束時間</label>
-              <input
-                type="time"
+              <label className="mb-1 block text-sm font-medium">
+                結束時間 <span className="text-zinc-400">（選填）</span>
+              </label>
+              <HourSelect
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                required
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
+                onChange={setEndTime}
+                includeEndOfDay
               />
             </div>
           </div>
@@ -194,7 +198,7 @@ export function AppointmentModal({
           </div>
 
           <p className="text-xs text-zinc-400">
-            已預填空檔時段 {formatTimeRange(initialStart.slice(0, 5), initialEnd.slice(0, 5))}，可調整時間
+            已預填空檔時段 {formatTimeRange(initialStart, initialEnd)}，可調整時間；未填結束時間則預設 24 點（晚上 12 點）
           </p>
 
           {error && <p className="text-sm text-red-500">{error}</p>}

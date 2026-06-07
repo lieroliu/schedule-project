@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { formatDisplayDate } from "@/lib/calendar-utils";
-import { formatScheduleTime } from "@/lib/time-utils";
+import { formatScheduleTime, isEndAfterStart, timeToHour } from "@/lib/time-utils";
 import type { Participant } from "@/lib/types";
+import { HourSelect } from "./HourSelect";
 
 export interface ScheduleFormData {
   note: string;
@@ -46,8 +47,8 @@ export function ScheduleModal({
 }: ScheduleModalProps) {
   const othersSchedules = schedules.filter((s) => s.scheduleId !== myScheduleId);
   const [note, setNote] = useState(myScheduleNote ?? "");
-  const [startTime, setStartTime] = useState(myStartTime?.slice(0, 5) ?? "");
-  const [endTime, setEndTime] = useState(myEndTime?.slice(0, 5) ?? "");
+  const [startTime, setStartTime] = useState(timeToHour(myStartTime));
+  const [endTime, setEndTime] = useState(timeToHour(myEndTime));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -66,12 +67,12 @@ export function ScheduleModal({
     const hasStart = startTime.trim().length > 0;
     const hasEnd = endTime.trim().length > 0;
 
-    if (hasStart !== hasEnd) {
-      setError("請同時填寫開始與結束時間，或兩者都留空代表整天沒空");
+    if (!hasStart && hasEnd) {
+      setError("請填寫開始時間");
       return;
     }
 
-    if (hasStart && hasEnd && startTime >= endTime) {
+    if (hasStart && !isEndAfterStart(startTime, hasEnd ? endTime : "24")) {
       setError("結束時間必須晚於開始時間");
       return;
     }
@@ -167,26 +168,22 @@ export function ScheduleModal({
               <label className="mb-1 block text-sm font-medium">
                 開始時間 <span className="text-zinc-400">（選填）</span>
               </label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
-              />
+              <HourSelect value={startTime} onChange={setStartTime} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">
                 結束時間 <span className="text-zinc-400">（選填）</span>
               </label>
-              <input
-                type="time"
+              <HourSelect
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
+                onChange={setEndTime}
+                includeEndOfDay
               />
             </div>
           </div>
-          <p className="text-xs text-zinc-400">不填時間代表整天都沒空（24 小時）</p>
+          <p className="text-xs text-zinc-400">
+            不填時間代表整天都沒空；只填開始時間則預設結束於 24 點（晚上 12 點）
+          </p>
 
           <div>
             <label className="mb-1 block text-sm font-medium">我的排程</label>

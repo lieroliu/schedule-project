@@ -14,23 +14,57 @@ export interface AvailableSlot {
   endTime: string;
 }
 
+export const DEFAULT_END_HOUR = 24;
+
 export function parseTimeToMinutes(time: string | null | undefined): number | null {
   if (!time) return null;
   const parts = time.split(":");
   const hours = Number(parts[0]);
   const minutes = Number(parts[1] ?? 0);
   if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+  if (hours === 24 && minutes === 0) return DAY_END_MINUTES;
   return hours * 60 + minutes;
 }
 
 export function formatMinutes(minutes: number): string {
+  if (minutes >= DAY_END_MINUTES) return "24:00";
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+export function timeToHour(time: string | null | undefined): string {
+  if (!time) return "";
+  if (time.startsWith("24:")) return "24";
+  const hour = Number(time.slice(0, 2));
+  return Number.isNaN(hour) ? "" : String(hour);
+}
+
+export function hourToTimeString(hour: string): string {
+  const h = Number(hour);
+  if (Number.isNaN(h)) return "";
+  if (h === 24) return "24:00";
+  return `${String(h).padStart(2, "0")}:00`;
+}
+
+export function formatHour(time: string | null | undefined): string {
+  const minutes = parseTimeToMinutes(time);
+  if (minutes === null) return "";
+  if (minutes >= DAY_END_MINUTES) return "24";
+  return String(Math.floor(minutes / 60));
+}
+
 export function formatTimeRange(startTime: string, endTime: string): string {
-  return `${startTime}-${endTime}`;
+  return `${formatHour(startTime)}-${formatHour(endTime)}`;
+}
+
+export function isEndAfterStart(startTime: string, endTime: string): boolean {
+  const start = parseTimeToMinutes(hourToTimeString(startTime));
+  const end = parseTimeToMinutes(
+    endTime.trim() ? hourToTimeString(endTime) : "24:00",
+  );
+  if (start === null || end === null) return false;
+  return end > start;
 }
 
 export function normalizeTimeInput(time: string): string {
@@ -48,29 +82,41 @@ export function resolveScheduleTimes(
     return { start_time: null, end_time: null };
   }
 
-  if (hasStart && hasEnd) {
-    return {
-      start_time: normalizeTimeInput(startTime),
-      end_time: normalizeTimeInput(endTime),
-    };
+  if (!hasStart && hasEnd) {
+    throw new Error("請填寫開始時間");
   }
 
-  throw new Error("請同時填寫開始與結束時間，或兩者都留空代表整天沒空");
+  const start = hourToTimeString(startTime.trim());
+  const end = hasEnd ? hourToTimeString(endTime.trim()) : "24:00";
+
+  if (!isEndAfterStart(startTime.trim(), hasEnd ? endTime.trim() : "24")) {
+    throw new Error("結束時間必須晚於開始時間");
+  }
+
+  return {
+    start_time: normalizeTimeInput(start),
+    end_time: normalizeTimeInput(end),
+  };
 }
 
 export function resolveAgreedTimes(
   startTime: string,
   endTime: string,
 ): { start_time: string; end_time: string } {
-  if (!startTime.trim() || !endTime.trim()) {
-    throw new Error("請填寫開始與結束時間");
+  if (!startTime.trim()) {
+    throw new Error("請填寫開始時間");
   }
-  if (startTime >= endTime) {
+
+  const start = hourToTimeString(startTime.trim());
+  const end = endTime.trim() ? hourToTimeString(endTime.trim()) : "24:00";
+
+  if (!isEndAfterStart(startTime.trim(), endTime.trim() || "24")) {
     throw new Error("結束時間必須晚於開始時間");
   }
+
   return {
-    start_time: normalizeTimeInput(startTime),
-    end_time: normalizeTimeInput(endTime),
+    start_time: normalizeTimeInput(start),
+    end_time: normalizeTimeInput(end),
   };
 }
 
@@ -185,9 +231,7 @@ export function formatScheduleTime(
   endTime: string | null,
 ): string {
   if (!startTime || !endTime) return "整天沒空";
-  const start = startTime.slice(0, 5);
-  const end = endTime.slice(0, 5);
-  return `${start}-${end}`;
+  return formatTimeRange(startTime, endTime);
 }
 
 export function formatAgreedTime(agreed: AgreedSlot): string {
