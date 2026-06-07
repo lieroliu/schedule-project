@@ -51,7 +51,7 @@ export function formatHour(time: string | null | undefined): string {
   const minutes = parseTimeToMinutes(time);
   if (minutes === null) return "";
   if (minutes >= DAY_END_MINUTES) return "24";
-  return String(Math.floor(minutes / 60));
+  return String(Math.floor(minutes / 60)).padStart(2, "0");
 }
 
 export function formatTimeRange(startTime: string, endTime: string): string {

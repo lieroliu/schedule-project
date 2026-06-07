@@ -114,8 +114,9 @@ export function ScheduleModal({
       >
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-semibold">排程</h2>
-            <p className="text-sm text-zinc-500">{formatDisplayDate(dateKey)}</p>
+            <h2 className="text-2xl font-bold tracking-tight">
+              {formatDisplayDate(dateKey)}
+            </h2>
             <p className="mt-1 text-sm font-medium text-indigo-600 dark:text-indigo-400">
               {userName}
             </p>
